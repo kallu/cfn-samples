@@ -1,0 +1,70 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: EC2 autoscaling instance (param-store)
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      -
+        Label:
+          default: Instance configuration
+        Parameters:
+          - InstanceType
+          - AmiId
+      -
+        Label:
+          default: Network configuration
+        Parameters:
+          - VpcId
+          - Subnets
+
+Parameters: 
+  VpcId:
+    Description: VPC ID 
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::VPC::Id>
+    Default: /cloudformation/sample-vpc/vpcid
+  Subnets:
+    Description: Subnets
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: /cloudformation/sample-vpc/pubsubnets
+  AmiId:
+      Description: AMI ID
+      Type: String
+      Default: ami-00035f41c82244dab
+  InstanceType:
+      Description: EC2 Instance Type
+      Type: String
+      Default: t2.nano
+
+Resources:
+
+  myLaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: !Ref AmiId
+      InstanceType: !Ref InstanceType
+      SecurityGroups:
+        - !Ref mySecGroup
+
+  myAutoscalingGroup: 
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Ref AWS::StackName
+      LaunchConfigurationName: !Ref myLaunchConfig
+      MaxSize: 1
+      MinSize: 1
+      VPCZoneIdentifier: !Split
+        - ','
+        - !Ref Subnets
+      Tags: 
+        - Key: Name
+          Value: !Ref AWS::StackName
+          PropagateAtLaunch: 'true'
+
+  mySecGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub Security group for ${AWS::StackName} 
+      VpcId: !Ref VpcId
+      Tags:
+        - Key: Name
+          Value: !Ref AWS::StackName

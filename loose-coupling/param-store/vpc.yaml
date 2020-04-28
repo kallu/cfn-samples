@@ -1,0 +1,194 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Simple VPC network (param-store)
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      -
+        Label:
+          default: Network address space
+        Parameters:
+          - VpcCidr
+          - PubCidrA
+          - PubCidrB
+          - PubCidrC
+
+Parameters:
+  VpcCidr:
+    Type: String
+    Description: VPC
+    Default: "10.0.0.0/21"
+    AllowedPattern: '((\d{1,3})\.){3}\d{1,3}/\d{1,2}'
+  PubCidrA:
+    Type: String
+    Description: Public Subnet A
+    Default: "10.0.0.0/24"
+    AllowedPattern: '(((\d{1,3})\.){3}\d{1,3}/\d{1,2}){0,1}'
+  PubCidrB:
+    Type: String
+    Description: Public Subnet B
+    Default: ""
+    AllowedPattern: '(((\d{1,3})\.){3}\d{1,3}/\d{1,2}){0,1}'
+  PubCidrC:
+    Type: String
+    Description: Public Subnet C
+    Default: ""
+    AllowedPattern: '(((\d{1,3})\.){3}\d{1,3}/\d{1,2}){0,1}'
+
+Conditions:
+  PubA: !Not [!Equals [!Ref PubCidrA, "" ]]
+  PubB: !Not [!Equals [!Ref PubCidrB, "" ]]
+  PubC: !Not [!Equals [!Ref PubCidrC, "" ]]
+  PubAny: !Or [ Condition: PubA, Condition: PubB, Condition: PubC ]
+
+Resources:
+
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      InstanceTenancy: default
+      Tags:
+      - Key: Name
+        Value: !Ref AWS::StackName
+
+  InetGW:
+    Type: AWS::EC2::InternetGateway
+    Condition: PubAny
+    Properties:
+      Tags:
+      - Key: Name
+        Value: !Ref AWS::StackName
+
+  InetGWattachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Condition: PubAny
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InetGW
+
+  PubSubnetA:
+    Type: AWS::EC2::Subnet
+    Condition: PubA
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Sub ${AWS::Region}a
+      CidrBlock: !Ref PubCidrA
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName} public subnet ${AWS::Region}a'
+
+  PubSubnetRoutingA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: PubA
+    Properties:
+      RouteTableId: !Ref PubRouteTable
+      SubnetId: !Ref PubSubnetA
+
+  PubSubnetB:
+    Type: AWS::EC2::Subnet
+    Condition: PubB
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Sub ${AWS::Region}b
+      CidrBlock: !Ref PubCidrB
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName} public subnet ${AWS::Region}b'
+
+  PubSubnetRoutingB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: PubB
+    Properties:
+      RouteTableId: !Ref PubRouteTable
+      SubnetId: !Ref PubSubnetB
+
+  PubSubnetC:
+    Type: AWS::EC2::Subnet
+    Condition: PubC
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Sub ${AWS::Region}c
+      CidrBlock: !Ref PubCidrC
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName} public subnet ${AWS::Region}c'
+
+  PubSubnetRoutingC:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: PubC
+    Properties:
+      RouteTableId: !Ref PubRouteTable
+      SubnetId: !Ref PubSubnetC
+
+  PubRouteTable:
+    Type: AWS::EC2::RouteTable
+    Condition: PubAny
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName} public route-table'
+
+  PubDefaultRoute:
+    Type: AWS::EC2::Route
+    Condition: PubAny
+    DependsOn: InetGW
+    Properties:
+      RouteTableId: !Ref PubRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref InetGW
+
+  ParamStoreVpcId:
+    Type: "AWS::SSM::Parameter"
+    Properties:
+      Name: !Sub '/cloudformation/${AWS::StackName}/vpcid'
+      Description: !Sub '${AWS::StackName} VPC ID'
+      Type: 'String'
+      Value: !Ref VPC
+
+  ParamStoreVpcCidr:
+    Type: "AWS::SSM::Parameter"
+    Properties:
+      Name: !Sub '/cloudformation/${AWS::StackName}/vpccidr'
+      Description: !Sub '${AWS::StackName} VPC CIDR'
+      Type: 'String'
+      Value: !Ref VpcCidr
+
+  ParamStorePubSubnets:
+    Type: "AWS::SSM::Parameter"
+    Properties:
+      Name: !Sub '/cloudformation/${AWS::StackName}/pubsubnets'
+      Description: !Sub '${AWS::StackName} public subnets'
+      Type: 'String'
+      Value: !Sub
+        - '${subnetA},${subnetB},${subnetC}'
+        - { subnetA: !If [ PubA, !Ref PubSubnetA, "" ], subnetB: !If [ PubB, !Ref PubSubnetB, "" ], subnetC: !If [ PubC, !Ref PubSubnetC, "" ] }
+
+Outputs:
+
+  VpcId:
+    Description: VPC ID
+    Value: !Ref VPC
+    # Export:
+    #   Name: !Sub '${AWS::StackName}-VpcId'
+
+  VpcCidrOutput:
+    Description: VPC CIDR
+    Value: !Ref VpcCidr
+    # Export:
+    #   Name: !Sub '${AWS::StackName}-VpcCidr'
+
+  PubSubnets:
+    Description: Public Subnets
+    Value: !Sub
+      - '${subnetA},${subnetB},${subnetC}'
+      - { subnetA: !If [ PubA, !Ref PubSubnetA, "" ], subnetB: !If [ PubB, !Ref PubSubnetB, "" ], subnetC: !If [ PubC, !Ref PubSubnetC, "" ] }
+    # Export:
+    #   Name: !Sub '${AWS::StackName}-PubSubnets'
