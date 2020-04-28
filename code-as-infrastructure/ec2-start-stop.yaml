@@ -23,7 +23,8 @@ Parameters:
 Globals:
 
   Function:
-    Runtime: python2.7
+    Runtime: python3.7
+    MemorySize: 128
     Timeout: 300
     Handler: index.handler
     Environment:
@@ -37,7 +38,6 @@ Resources:
     Type: 'AWS::Serverless::Function'
     Properties:
       Description: Start Ec2 Instances
-      MemorySize: 128
       Policies:
         - Version: '2012-10-17'
           Statement:
@@ -59,13 +59,12 @@ Resources:
         def handler(event, context):
           ec2 = boto3.client('ec2', region_name=region)
           ec2.start_instances(InstanceIds=instances)
-          print 'INFO: Started instances: ' + str(instances)
+          print ('INFO: Started instances: ' + str(instances))
 
   StopInstances:
     Type: 'AWS::Serverless::Function'
     Properties:
       Description: Stop Ec2 Instances
-      MemorySize: 128
       Policies:
         - Version: '2012-10-17'
           Statement:
@@ -87,4 +86,4 @@ Resources:
         def handler(event, context):
           ec2 = boto3.client('ec2', region_name=region)
           ec2.stop_instances(InstanceIds=instances)
-          print 'INFO: Stopped instances: ' + str(instances)
+          print ('INFO: Stopped instances: ' + str(instances))
