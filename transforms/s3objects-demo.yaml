@@ -1,0 +1,34 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'S3Objects'
+Description: S3 object creation demo
+
+Resources:
+
+  Bucket:
+    Type: AWS::S3::Bucket
+
+  Object1:
+    Type: AWS::S3::Object
+    Properties:
+      Target:
+        Bucket: !Ref Bucket
+        Key: Object1.txt
+        ContentType: text/plain
+      Body: Hello World 
+
+  Object2:
+    Type: AWS::S3::Object
+    Properties:
+      Source:
+        Bucket: !GetAtt Object1.Bucket
+        Key: !GetAtt Object1.Key
+      Target:
+        Bucket: !Ref Bucket
+        Key: Object2.txt
+
+Outputs:
+
+  BucketName:
+    Description: S3 Bucket
+    Value: !Ref Bucket

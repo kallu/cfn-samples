@@ -1,0 +1,183 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: S3Objects transform
+
+Resources:
+  ResourceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: python3.6
+      Handler: index.handler
+      Policies: AmazonS3FullAccess
+      InlineCode: |
+        from urllib.request import build_opener, HTTPHandler, Request
+        import base64
+        import boto3
+        import http.client
+        import json       
+
+        s3_client = boto3.client("s3")        
+
+        def sendResponse(event, context, status, message):
+            bucket = event["ResourceProperties"].get("Target", {}).get("Bucket")
+            key = event["ResourceProperties"].get("Target", {}).get("Key")        
+
+            body = json.dumps({
+                "Status": status,
+                "Reason": message,
+                "StackId": event['StackId'],
+                "RequestId": event['RequestId'],
+                "LogicalResourceId": event['LogicalResourceId'],
+                "PhysicalResourceId": "s3://{}/{}".format(bucket, key),
+                "Data": {
+                    "Bucket": bucket,
+                    "Key": key,
+                },
+            }).encode()        
+
+            request = Request(event['ResponseURL'], data=body)
+            request.add_header('Content-Type', '')
+            request.add_header('Content-Length', len(body))
+            request.get_method = lambda: 'PUT'        
+
+            opener = build_opener(HTTPHandler)
+            response = opener.open(request)
+
+        def handler(event, context):
+            print(("Received request:", json.dumps(event, indent=4)))       
+
+            request = event["RequestType"]
+            properties = event["ResourceProperties"]        
+
+            if "Target" not in properties or all(prop not in properties for prop in ["Body", "Base64Body", "Source"]):
+                return sendResponse(event, context, "FAILED", "Missing required parameters")        
+
+            target = properties["Target"]       
+
+            if request in ("Create", "Update"):
+                if "Body" in properties:
+                    target.update({
+                        "Body": properties["Body"],
+                    })        
+
+                    s3_client.put_object(**target)        
+
+                elif "Base64Body" in properties:
+                    try:
+                        body = base64.b64decode(properties["Base64Body"])
+                    except:
+                        return sendResponse(event, context, "FAILED", "Malformed Base64Body")       
+
+                    target.update({
+                        "Body": body
+                    })        
+
+                    s3_client.put_object(**target)        
+
+                elif "Source" in properties:
+                    source = properties["Source"]       
+
+                    s3_client.copy_object(
+                        CopySource=source,
+                        Bucket=target["Bucket"],
+                        Key=target["Key"],
+                        MetadataDirective="COPY",
+                        TaggingDirective="COPY",
+                        ACL=target["ACL"],
+                    )       
+
+                else:
+                    return sendResponse(event, context, "FAILED", "Malformed body")       
+
+                return sendResponse(event, context, "SUCCESS", "Created")       
+
+            if request == "Delete":
+                s3_client.delete_object(
+                    Bucket=target["Bucket"],
+                    Key=target["Key"],
+                )       
+
+                return sendResponse(event, context, "SUCCESS", "Deleted")       
+
+            return sendResponse(event, context, "FAILED", "Unexpected: {}".format(request))
+
+  MacroFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: python3.6
+      Handler: index.handler
+      Policies: AmazonS3FullAccess
+      Environment:
+        Variables:
+          LAMBDA_ARN: !GetAtt ResourceFunction.Arn
+      InlineCode: |
+        import boto3
+        import os
+
+        LAMBDA_ARN = os.environ["LAMBDA_ARN"]
+
+        s3_client = boto3.client("s3")
+
+        def handle_template(request_id, template):
+            new_resources = {}
+
+            for name, resource in template.get("Resources", {}).items():
+                if resource["Type"] == "AWS::S3::Object":
+                    props = resource["Properties"]
+
+                    if len([prop for prop in resource["Properties"] if prop in ["Body", "Base64Body", "Source"]]) != 1:
+                        raise Exception("You must specify exactly one of: Body, Base64Body, Source")
+
+                    target = props["Target"]
+
+                    if "ACL" not in target:
+                        target["ACL"] = "private"
+
+                    resource_props = {
+                        "ServiceToken": LAMBDA_ARN,
+                        "Target": target,
+                    }
+
+                    if "Body" in props:
+                        resource_props["Body"] = props["Body"]
+
+                    elif "Base64Body" in props:
+                        resource_props["Base64Body"] = props["Base64Body"]
+
+                    elif "Source" in props:
+                        resource_props["Source"] = props["Source"]
+
+                    new_resources[name] = {
+                        "Type": "Custom::S3Object",
+                        "Version": "1.0",
+                        "Properties": resource_props,
+                    }
+
+            for name, resource in new_resources.items():
+                template["Resources"][name] = resource
+
+            return template
+
+        def handler(event, context):
+            try:
+                template = handle_template(event["requestId"], event["fragment"])
+            except Exception as e:
+                return {
+                    "requestId": event["requestId"],
+                    "status": "failure",
+                    "fragment": event["fragment"],
+                }       
+
+            return {
+                "requestId": event["requestId"],
+                "status": "success",
+                "fragment": template,
+            }
+
+  Macro:
+    Type: AWS::CloudFormation::Macro
+    Properties:
+      Name: S3Objects
+      FunctionName: !GetAtt MacroFunction.Arn
+
