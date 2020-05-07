@@ -1,0 +1,31 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Create SSM Parameter Store Key-Value -pair
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      -
+        Label:
+          default: SSM Parameter Store
+        Parameters:
+          - ssmKey
+          - ssmValue
+
+Parameters: 
+  ssmKey:
+      Description: Parameter Key
+      Type: String
+      Default: hello
+  ssmValue:
+      Description: Parameter Value
+      Type: String
+      Default: world
+
+Resources:
+
+  KeyValue:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Ref ssmKey
+      Value: !Ref ssmValue
+      Type: String      
