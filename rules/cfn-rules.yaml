@@ -1,0 +1,46 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Cross parameter validation
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      -
+        Label:
+          default: Network configuration
+        Parameters:
+          - VPC
+          - Subnets
+
+Parameters:
+
+  VPC:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC for deployment
+
+  Subnets:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Subnets within above VPC
+
+Rules:
+
+  SubnetsInVPC:
+    Assertions:
+    - Assert:
+        Fn::EachMemberIn:
+        - Fn::ValueOfAll:
+          - AWS::EC2::Subnet::Id
+          - VpcId
+        - 
+          - !Ref VPC
+      AssertDescription: All subnets must within the given VPC
+
+Resources:
+
+  SecGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: Dummy sec.group for a demo
+      
+
