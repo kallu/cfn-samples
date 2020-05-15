@@ -138,11 +138,11 @@ Conditions:
 
 Resources:
 
-  MyDB:
+  MyDB2:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Retain
     Properties:
-      DBInstanceIdentifier: !Ref AWS::StackName
+      DBInstanceIdentifier: dbtest2
       StorageType: gp2
       AllocatedStorage: !Ref DBStorage
       DBInstanceClass: !Ref DBInstanceClass
@@ -167,7 +167,7 @@ Resources:
     Condition: HasReplica
     Properties:
       DBInstanceIdentifier: !Sub "${AWS::StackName}-replica"
-      SourceDBInstanceIdentifier: !Ref MyDB
+      SourceDBInstanceIdentifier: !Ref MyDB2
       DBInstanceClass: !Ref DBInstanceClass
       Tags:
         - Key: Name
@@ -250,7 +250,7 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: DBInstanceIdentifier
-          Value: !Ref MyDB
+          Value: !Ref MyDB2
       AlarmActions: !Sub "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:${SNSTopic}"
       OKActions: !Sub "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:${SNSTopic}"
 
@@ -269,7 +269,7 @@ Resources:
       ComparisonOperator: LessThanThreshold
       Dimensions:
         - Name: DBInstanceIdentifier
-          Value: !Ref MyDB
+          Value: !Ref MyDB2
       AlarmActions: !Sub "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:${SNSTopic}"
       OKActions: !Sub "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:${SNSTopic}"
 
@@ -288,19 +288,19 @@ Resources:
       ComparisonOperator: LessThanThreshold
       Dimensions:
         - Name: DBInstanceIdentifier
-          Value: !Ref MyDB
+          Value: !Ref MyDB2
       AlarmActions: !Sub "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:${SNSTopic}"
       OKActions: !Sub "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:${SNSTopic}"
 
   DBDNSRecord:
     Type: AWS::Route53::RecordSet
     Condition: HasDBDomain
-    DependsOn: MyDB
+    DependsOn: MyDB2
     Properties:
       Comment: CNAME to RDS database
       HostedZoneName: !Ref R53HostedZoneName
       Name: !Ref Cname
-      ResourceRecords: !GetAtt MyDB.Endpoint.Address
+      ResourceRecords: !GetAtt MyDB2.Endpoint.Address
       TTL: 300
       Type: CNAME
 
@@ -324,7 +324,7 @@ Resources:
       Type: String
       Value: !Sub
         - 'jdbc:postgresql://${addr}:${port}/${name}'
-        - { addr: !GetAtt MyDB.Endpoint.Address, port: !GetAtt MyDB.Endpoint.Port, name: postgres }
+        - { addr: !GetAtt MyDB2.Endpoint.Address, port: !GetAtt MyDB2.Endpoint.Port, name: postgres }
 
   ParamStoreJDBCReplica:
     Type: AWS::SSM::Parameter
@@ -371,7 +371,7 @@ Outputs:
     Description: JDBC connection string for master database
     Value: !Sub
       - 'jdbc:postgresql://${addr}:${port}/${name}'
-      - { addr: !GetAtt MyDB.Endpoint.Address, port: !GetAtt MyDB.Endpoint.Port, name: postgres }
+      - { addr: !GetAtt MyDB2.Endpoint.Address, port: !GetAtt MyDB2.Endpoint.Port, name: postgres }
     Export:
       Name: !Sub "${AWS::StackName}-JDBCConnectionString"
 

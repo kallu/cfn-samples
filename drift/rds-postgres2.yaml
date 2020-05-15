@@ -162,6 +162,30 @@ Resources:
         - Key: Name
           Value: !Ref AWS::StackName
 
+  MyDB2:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Retain
+    Properties:
+      DBInstanceIdentifier: dbtest2
+      StorageType: gp2
+      AllocatedStorage: !Ref DBStorage
+      DBInstanceClass: !Ref DBInstanceClass
+      Engine: postgres
+      EngineVersion: !Ref DBVersion
+      MultiAZ: !Ref MultiAZ
+      MasterUsername: !Ref MasterUsername
+      MasterUserPassword: !Ref MasterUserPassword
+      DBParameterGroupName: !Ref MyRDSParamGroup
+      VPCSecurityGroups:
+        - !Ref MySecGroup
+        - !Ref MyExtSecGroup
+      DBSubnetGroupName: !Ref MySubnetGroup
+      BackupRetentionPeriod: 30
+      CopyTagsToSnapshot: true
+      Tags:
+        - Key: Name
+          Value: !Ref AWS::StackName
+
   ReplicaDB:
     Type: AWS::RDS::DBInstance
     Condition: HasReplica
