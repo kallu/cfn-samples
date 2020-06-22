@@ -28,8 +28,8 @@ Rules:
     Assertions:
     - Assert:
         Fn::EachMemberIn:
-        - Fn::ValueOfAll:
-          - AWS::EC2::Subnet::Id
+        - Fn::ValueOf:
+          - Subnets
           - VpcId
         - 
           - !Ref VPC
